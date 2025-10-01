@@ -1,0 +1,16 @@
+[package]
+name = "fust-orm"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "fust_orm"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.26.0"
+pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "sqlite"] }
+thiserror = "2.0.17"
+tokio = { version = "1.47.1", features = ["full"] }
