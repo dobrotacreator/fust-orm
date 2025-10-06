@@ -2,14 +2,61 @@
 requires = ["maturin>=1.9,<2.0"]
 build-backend = "maturin"
 
+
 [project]
 name = "fust_orm"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
 ]
 dynamic = ["version"]
-[tool.maturin]
-features = ["pyo3/extension-module"]
+description = "An experimental, blazingly fast, and intuitive asynchronous ORM for Python, written in Rust."
+authors = [
+    { name = "dobrotacreator", email = "dobrota.creator@gmail.com" },
+]
+maintainers = [
+    { name = "dobrotacreator", email = "dobrota.creator@gmail.com" },
+]
+readme = "README.md"
+license = "MIT"
+
+[project.urls]
+Repository = "https://github.com/dobrotacreator/fust-orm"
+Issues = "https://github.com/dobrotacreator/fust-orm/issues"
+
+
+[dependency-groups]
+dev = [
+  {include-group = "lint"},
+  {include-group = "tests"},
+  "maturin>=1.9.5",
+]
+lint = [
+    "mypy>=1.14.1",
+    "pyright>=1.1.406",
+    "ruff>=0.13.3",
+]
+tests = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+
+[tool.mypy]
+strict = true

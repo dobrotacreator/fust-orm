@@ -1,2 +1,16 @@
-.env
-target
+# For Helix Editor
+
+*.lock
+
+*.typed
+
+/target
+
+*.so
+
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+.venv/
