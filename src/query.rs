@@ -17,6 +17,8 @@ enum QueryType {
         table: String,
         columns: Vec<String>,
         where_clauses: Vec<WhereCondition>,
+        limit: Option<usize>,
+        offset: Option<usize>,
     },
     /// A raw SQL string with its associated parameters.
     Raw {
@@ -46,7 +48,9 @@ impl QueryBuilder {
                 table,
                 columns,
                 where_clauses,
-            } => self.build_structured(py, table, columns, where_clauses),
+                limit,
+                offset,
+            } => self.build_structured(py, table, columns, where_clauses, *limit, *offset),
             QueryType::Raw { sql, params } => self.build_raw(py, sql, params),
         }
     }
@@ -58,6 +62,8 @@ impl QueryBuilder {
         table: &str,
         columns: &[String],
         where_clauses: &[WhereCondition],
+        limit: Option<usize>,
+        offset: Option<usize>,
     ) -> PyResult<(String, Vec<String>)> {
         debug!(
             "Building structured query for table '{}' with {} explicit columns and {} where clauses.",
@@ -114,6 +120,16 @@ impl QueryBuilder {
 
             sql.push_str(&conditions?.join(" AND "));
         }
+
+        if let Some(limit_val) = limit {
+            sql.push_str(" LIMIT ");
+            sql.push_str(&limit_val.to_string());
+        }
+
+        if let Some(offset_val) = offset {
+            sql.push_str(" OFFSET ");
+            sql.push_str(&offset_val.to_string());
+        }
         Ok((sql, params))
     }
 
@@ -148,8 +164,13 @@ impl QueryBuilder {
 ///     Pass a SQL string as the first argument, followed by any parameters.
 ///     Example: `select("SELECT * FROM users WHERE age > ?", 18)`
 #[pyfunction]
-#[pyo3(signature = (*args))]
-pub fn select(_py: Python, args: &Bound<'_, PyTuple>) -> PyResult<QueryBuilder> {
+#[pyo3(signature = (*args, limit=None, offset=None))]
+pub fn select(
+    _py: Python,
+    args: &Bound<'_, PyTuple>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> PyResult<QueryBuilder> {
     if args.is_empty() {
         return Err(FustOrmError::InvalidQueryArgument(
             "select() cannot be called with no arguments.".to_string(),
@@ -161,6 +182,12 @@ pub fn select(_py: Python, args: &Bound<'_, PyTuple>) -> PyResult<QueryBuilder> 
 
     // Mode 1: Raw SQL Query
     if let Ok(sql_str) = first_arg.extract::<String>() {
+        if limit.is_some() || offset.is_some() {
+            return Err(FustOrmError::InvalidQueryArgument(
+                "limit/offset kwargs are only supported for ORM-style select() usage.".to_string(),
+            )
+            .into());
+        }
         debug!("Creating a new raw SQL query.");
         let params: Vec<Py<PyAny>> = args.iter().skip(1).map(|item| item.into()).collect();
         return Ok(QueryBuilder {
@@ -247,6 +274,8 @@ pub fn select(_py: Python, args: &Bound<'_, PyTuple>) -> PyResult<QueryBuilder> 
             table: final_table_name,
             columns,
             where_clauses,
+            limit,
+            offset,
         },
     })
 }

@@ -253,6 +253,8 @@ def select(sql_query: str, *params: Any) -> "QueryBuilder":
 @overload
 def select(
     *clauses: Union[ColumnField[Any], WhereCondition, Type[Model]],
+    limit: int | None = ...,
+    offset: int | None = ...,
 ) -> "QueryBuilder":
     """Creates a query builder instance using an ORM-style syntax.
 
@@ -262,6 +264,8 @@ def select(
     Args:
         *clauses: The components of your query, including models,
                   columns, and where conditions.
+        limit: Optional maximum number of rows to return (applied to the final SQL).
+        offset: Optional number of rows to skip before returning results.
 
     Returns:
         A `QueryBuilder` instance for executing the query.

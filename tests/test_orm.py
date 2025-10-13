@@ -262,6 +262,24 @@ async def test_like_operator(db: Database) -> None:
     assert results[0]["id"] == 1
 
 
+async def test_select_with_limit_and_offset(db: Database) -> None:
+    await db.execute(
+        """
+        INSERT INTO user (id, name, age, manager_id) VALUES
+        (1, 'Alice', 30, NULL),
+        (2, 'Bob', 25, 1),
+        (3, 'Charlie', 35, 1),
+        (4, 'Diana', 28, NULL);
+        """
+    )
+
+    limited = await db.execute(select(User, limit=2))
+    assert len(limited) == 2
+
+    offset = await db.execute(select(User, limit=2, offset=1))
+    assert len(offset) == 2
+
+
 async def test_select_from_multiple_tables_raises_error() -> None:
     with pytest.raises(ValueError):
         select(User.id, Product.product_name)
@@ -270,3 +288,9 @@ async def test_select_from_multiple_tables_raises_error() -> None:
 async def test_select_with_no_arguments_raises_error() -> None:
     with pytest.raises(ValueError):
         select()
+
+
+def test_select_with_limit_in_raw_query_raises_error() -> None:
+    with pytest.raises(ValueError):
+        #                                        break type for test
+        select("SELECT * FROM user", limit=1)  # type: ignore[call-overload]
