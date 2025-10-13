@@ -67,6 +67,7 @@ impl Model {
                         table_name: table_name.clone(),
                         column_name: column_name.clone(),
                         where_conditions: Vec::new(),
+                        order_direction: None,
                     },
                 )?;
                 cls.setattr(column_name, column_field)?;

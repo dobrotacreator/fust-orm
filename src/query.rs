@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::column_field::ColumnField;
+use crate::column_field::{ColumnField, OrderDirection};
 use crate::error::FustOrmError;
 use crate::model::Model;
 use crate::where_condition::WhereCondition;
@@ -17,6 +17,7 @@ enum QueryType {
         table: String,
         columns: Vec<String>,
         where_clauses: Vec<WhereCondition>,
+        order_by: Vec<OrderClause>,
         limit: Option<usize>,
         offset: Option<usize>,
     },
@@ -25,6 +26,12 @@ enum QueryType {
         sql: String,
         params: Arc<Vec<Py<PyAny>>>,
     },
+}
+
+#[derive(Debug, Clone)]
+struct OrderClause {
+    column_name: String,
+    direction: OrderDirection,
 }
 
 /// A builder object that accumulates parts of a SQL query.
@@ -48,9 +55,12 @@ impl QueryBuilder {
                 table,
                 columns,
                 where_clauses,
+                order_by,
                 limit,
                 offset,
-            } => self.build_structured(py, table, columns, where_clauses, *limit, *offset),
+            } => {
+                self.build_structured(py, table, columns, where_clauses, order_by, *limit, *offset)
+            }
             QueryType::Raw { sql, params } => self.build_raw(py, sql, params),
         }
     }
@@ -62,14 +72,16 @@ impl QueryBuilder {
         table: &str,
         columns: &[String],
         where_clauses: &[WhereCondition],
+        order_by: &[OrderClause],
         limit: Option<usize>,
         offset: Option<usize>,
     ) -> PyResult<(String, Vec<String>)> {
         debug!(
-            "Building structured query for table '{}' with {} explicit columns and {} where clauses.",
+            "Building structured query for table '{}' with {} explicit columns, {} where clauses, and {} order clauses.",
             table,
             columns.len(),
-            where_clauses.len()
+            where_clauses.len(),
+            order_by.len()
         );
 
         // Use a HashSet to automatically handle duplicate column names.
@@ -121,6 +133,22 @@ impl QueryBuilder {
             sql.push_str(&conditions?.join(" AND "));
         }
 
+        if !order_by.is_empty() {
+            let ordering = order_by
+                .iter()
+                .map(|clause| {
+                    let dir = match clause.direction {
+                        OrderDirection::Asc => "ASC",
+                        OrderDirection::Desc => "DESC",
+                    };
+                    format!("{} {}", clause.column_name, dir)
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            sql.push_str(" ORDER BY ");
+            sql.push_str(&ordering);
+        }
+
         if let Some(limit_val) = limit {
             sql.push_str(" LIMIT ");
             sql.push_str(&limit_val.to_string());
@@ -164,10 +192,11 @@ impl QueryBuilder {
 ///     Pass a SQL string as the first argument, followed by any parameters.
 ///     Example: `select("SELECT * FROM users WHERE age > ?", 18)`
 #[pyfunction]
-#[pyo3(signature = (*args, limit=None, offset=None))]
+#[pyo3(signature = (*args, order_by=None, limit=None, offset=None))]
 pub fn select(
     _py: Python,
     args: &Bound<'_, PyTuple>,
+    order_by: Option<&Bound<'_, PyAny>>,
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> PyResult<QueryBuilder> {
@@ -182,9 +211,10 @@ pub fn select(
 
     // Mode 1: Raw SQL Query
     if let Ok(sql_str) = first_arg.extract::<String>() {
-        if limit.is_some() || offset.is_some() {
+        if limit.is_some() || offset.is_some() || order_by.is_some() {
             return Err(FustOrmError::InvalidQueryArgument(
-                "limit/offset kwargs are only supported for ORM-style select() usage.".to_string(),
+                "limit/offset/order_by kwargs are only supported for ORM-style select() usage."
+                    .to_string(),
             )
             .into());
         }
@@ -206,6 +236,7 @@ pub fn select(
     let mut table_name = None;
     let mut columns = Vec::new();
     let mut where_clauses = Vec::new();
+    let mut order_by_clauses = Vec::new();
 
     for arg in args.iter() {
         if let Ok(py_type) = arg.downcast::<PyType>()
@@ -256,6 +287,38 @@ pub fn select(
         }
     }
 
+    if let Some(order_iterable) = order_by {
+        let iterator = order_iterable.try_iter().map_err(|_| {
+            FustOrmError::InvalidQueryArgument(
+                "order_by must be an iterable of ColumnField objects.".to_string(),
+            )
+        })?;
+        for item in iterator {
+            let bound = item.map_err(|_| {
+                FustOrmError::InvalidQueryArgument(
+                    "order_by must be an iterable of ColumnField objects.".to_string(),
+                )
+            })?;
+            let col_field = bound.extract::<PyRef<ColumnField>>().map_err(|_| {
+                FustOrmError::InvalidQueryArgument(
+                    "order_by iterable must contain only ColumnField instances.".to_string(),
+                )
+            })?;
+            if table_name.is_none() {
+                table_name = Some(col_field.table_name.clone());
+            } else if table_name.as_ref() != Some(&col_field.table_name) {
+                return Err(FustOrmError::InvalidQueryArgument(
+                    "Cannot order by columns from multiple tables in one query.".to_string(),
+                )
+                .into());
+            }
+            order_by_clauses.push(OrderClause {
+                column_name: col_field.column_name.clone(),
+                direction: col_field.order_direction.unwrap_or(OrderDirection::Asc),
+            });
+        }
+    }
+
     // Determine the final table name.
     let final_table_name = if let Some(name) = table_name {
         name
@@ -274,6 +337,7 @@ pub fn select(
             table: final_table_name,
             columns,
             where_clauses,
+            order_by: order_by_clauses,
             limit,
             offset,
         },

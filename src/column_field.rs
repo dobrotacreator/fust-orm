@@ -8,6 +8,13 @@ use pyo3::{
 
 use crate::where_condition::WhereCondition;
 
+/// Indicates the ordering direction when a column is used in an ORDER BY clause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderDirection {
+    Asc,
+    Desc,
+}
+
 /// Represents a database column as a Python object.
 ///
 /// This struct acts as a descriptor on a `Model` subclass. It captures column metadata
@@ -21,6 +28,7 @@ pub struct ColumnField {
     pub table_name: String,
     pub column_name: String,
     pub where_conditions: Vec<WhereCondition>,
+    pub order_direction: Option<OrderDirection>,
 }
 
 impl ColumnField {
@@ -171,6 +179,22 @@ impl ColumnField {
             last_condition.select_column = true;
         }
         Ok(new_field)
+    }
+
+    /// Returns a cloned `ColumnField` configured for ascending order.
+    #[pyo3(text_signature = "($self)")]
+    fn asc(&self) -> ColumnField {
+        let mut new_field = self.clone();
+        new_field.order_direction = Some(OrderDirection::Asc);
+        new_field
+    }
+
+    /// Returns a cloned `ColumnField` configured for descending order.
+    #[pyo3(text_signature = "($self)")]
+    fn desc(&self) -> ColumnField {
+        let mut new_field = self.clone();
+        new_field.order_direction = Some(OrderDirection::Desc);
+        new_field
     }
 
     /// Provides a developer-friendly representation of the ColumnField object.

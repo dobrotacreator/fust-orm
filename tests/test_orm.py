@@ -273,11 +273,34 @@ async def test_select_with_limit_and_offset(db: Database) -> None:
         """
     )
 
-    limited = await db.execute(select(User, limit=2))
-    assert len(limited) == 2
+    limited = await db.execute(select(User, limit=2, order_by=(User.id,)))
+    assert [row["id"] for row in limited] == [1, 2]
 
-    offset = await db.execute(select(User, limit=2, offset=1))
-    assert len(offset) == 2
+    offset_rows = await db.execute(select(User, limit=2, offset=1, order_by=(User.id,)))
+    assert [row["id"] for row in offset_rows] == [2, 3]
+
+
+async def test_select_with_order_by(db: Database) -> None:
+    await db.execute(
+        """
+        INSERT INTO user (id, name, age, manager_id) VALUES
+        (1, 'Alice', 30, NULL),
+        (2, 'Bob', 25, 1),
+        (3, 'Charlie', 35, 1);
+        """
+    )
+
+    query_desc = select(User.name, order_by=(User.age.desc(),))
+    results_desc = await db.execute(query_desc)
+    assert [row["name"] for row in results_desc] == ["Charlie", "Alice", "Bob"]
+
+    query_default = select(User.name, order_by=(User.name,))
+    results_default = await db.execute(query_default)
+    assert [row["name"] for row in results_default] == ["Alice", "Bob", "Charlie"]
+
+    query_multi = select(User.name, order_by=(User.age.desc(), User.name.desc()))
+    results_multi = await db.execute(query_multi)
+    assert [row["name"] for row in results_multi] == ["Charlie", "Alice", "Bob"]
 
 
 async def test_select_from_multiple_tables_raises_error() -> None:
@@ -294,3 +317,9 @@ def test_select_with_limit_in_raw_query_raises_error() -> None:
     with pytest.raises(ValueError):
         #                                        break type for test
         select("SELECT * FROM user", limit=1)  # type: ignore[call-overload]
+
+
+def test_select_with_order_by_in_raw_query_raises_error() -> None:
+    with pytest.raises(ValueError):
+        #                                                    break type for test
+        select("SELECT * FROM user", order_by=(User.id,))  # type: ignore[call-overload]

@@ -158,6 +158,12 @@ class ColumnField(Generic[T]):
     def is_not(self, value: Any) -> "ColumnField[T]":
         """Creates an `IS NOT` condition. A more readable alternative to `!=`."""
 
+    def asc(self) -> "ColumnField[T]":
+        """Returns a new `ColumnField` marked for ascending order when used in `order_by`."""
+
+    def desc(self) -> "ColumnField[T]":
+        """Returns a new `ColumnField` marked for descending order when used in `order_by`."""
+
     def __pos__(self) -> "ColumnField[T]":
         """Marks the most recent condition so its column is selected alongside filtering."""
 
@@ -253,6 +259,7 @@ def select(sql_query: str, *params: Any) -> "QueryBuilder":
 @overload
 def select(
     *clauses: Union[ColumnField[Any], WhereCondition, Type[Model]],
+    order_by: Iterable[ColumnField[Any]] | None = ...,
     limit: int | None = ...,
     offset: int | None = ...,
 ) -> "QueryBuilder":
@@ -266,6 +273,7 @@ def select(
                   columns, and where conditions.
         limit: Optional maximum number of rows to return (applied to the final SQL).
         offset: Optional number of rows to skip before returning results.
+        order_by: Optional iterable of `ColumnField` instances describing ORDER BY clauses.
 
     Returns:
         A `QueryBuilder` instance for executing the query.
