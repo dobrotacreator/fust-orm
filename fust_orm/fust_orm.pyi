@@ -38,98 +38,99 @@ class WhereCondition:
 class ColumnField(Generic[T]):
     """A descriptor representing a database column on a Model.
 
-    It translates Python operations into `WhereCondition` objects for building SQL queries.
+    It translates Python operations into new `ColumnField` objects that retain
+    accumulated `WHERE` conditions for building SQL queries.
     """
 
-    def __eq__(self, other: Any) -> "WhereCondition":  # type: ignore[override]
+    def __eq__(self, other: Any) -> "ColumnField[T]":  # type: ignore[override]
         """Creates an equality condition (`=` or `IS`).
 
         Args:
             other: The value to compare with. Handles `None` correctly.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def __ne__(self, other: Any) -> "WhereCondition":  # type: ignore[override]
+    def __ne__(self, other: Any) -> "ColumnField[T]":  # type: ignore[override]
         """Creates an inequality condition (`!=` or `IS NOT`).
 
         Args:
             other: The value to compare with. Handles `None` correctly.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def __gt__(self, other: Any) -> "WhereCondition":
+    def __gt__(self, other: Any) -> "ColumnField[T]":
         """Creates a "greater than" condition (`>`).
 
         Args:
             other: The value to compare with.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def __ge__(self, other: Any) -> "WhereCondition":
+    def __ge__(self, other: Any) -> "ColumnField[T]":
         """Creates a "greater than or equal to" condition (`>=`).
 
         Args:
             other: The value to compare with.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def __lt__(self, other: Any) -> "WhereCondition":
+    def __lt__(self, other: Any) -> "ColumnField[T]":
         """Creates a "less than" condition (`<`).
 
         Args:
             other: The value to compare with.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def __le__(self, other: Any) -> "WhereCondition":
+    def __le__(self, other: Any) -> "ColumnField[T]":
         """Creates a "less than or equal to" condition (`<=`).
 
         Args:
             other: The value to compare with.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def eq(self, other: Any) -> "WhereCondition":
+    def eq(self, other: Any) -> "ColumnField[T]":
         """Creates an equality condition (`=` or `IS`). Alias for `__eq__`."""
 
-    def ne(self, other: Any) -> "WhereCondition":
+    def ne(self, other: Any) -> "ColumnField[T]":
         """Creates an inequality condition (`!=` or `IS NOT`). Alias for `__ne__`."""
 
-    def gt(self, other: Any) -> "WhereCondition":
+    def gt(self, other: Any) -> "ColumnField[T]":
         """Creates a "greater than" condition (`>`). Alias for `__gt__`."""
 
-    def ge(self, other: Any) -> "WhereCondition":
+    def ge(self, other: Any) -> "ColumnField[T]":
         """Creates a "greater than or equal to" condition (`>=`). Alias for `__ge__`."""
 
-    def lt(self, other: Any) -> "WhereCondition":
+    def lt(self, other: Any) -> "ColumnField[T]":
         """Creates a "less than" condition (`<`). Alias for `__lt__`."""
 
-    def le(self, other: Any) -> "WhereCondition":
+    def le(self, other: Any) -> "ColumnField[T]":
         """Creates a "less than or equal to" condition (`<=`). Alias for `__le__`."""
 
-    def like(self, pattern: str) -> "WhereCondition":
+    def like(self, pattern: str) -> "ColumnField[T]":
         """Creates a `LIKE` condition (case-sensitive pattern matching).
 
         Args:
             pattern: The SQL pattern (e.g., "J%").
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def ilike(self, pattern: str) -> "WhereCondition":
+    def ilike(self, pattern: str) -> "ColumnField[T]":
         """Creates an `ILIKE` condition (case-insensitive pattern matching).
 
         Note: `ILIKE` is specific to databases like PostgreSQL.
@@ -138,24 +139,27 @@ class ColumnField(Generic[T]):
             pattern: The SQL pattern (e.g., "j%").
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def in_(self, values: Iterable[Any]) -> "WhereCondition":
+    def in_(self, values: Iterable[Any]) -> "ColumnField[T]":
         """Creates an `IN` condition to check for a value within an iterable.
 
         Args:
             values: An iterable (list, tuple, set, etc.) of values.
 
         Returns:
-            A `WhereCondition` object.
+            A new `ColumnField` with the added condition.
         """
 
-    def is_(self, value: Any) -> "WhereCondition":
+    def is_(self, value: Any) -> "ColumnField[T]":
         """Creates an `IS` condition. A more readable alternative to `==`."""
 
-    def is_not(self, value: Any) -> "WhereCondition":
+    def is_not(self, value: Any) -> "ColumnField[T]":
         """Creates an `IS NOT` condition. A more readable alternative to `!=`."""
+
+    def __pos__(self) -> "ColumnField[T]":
+        """Marks the most recent condition so its column is selected alongside filtering."""
 
     def __repr__(self) -> str: ...
 

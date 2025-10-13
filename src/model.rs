@@ -66,6 +66,7 @@ impl Model {
                     ColumnField {
                         table_name: table_name.clone(),
                         column_name: column_name.clone(),
+                        where_conditions: Vec::new(),
                     },
                 )?;
                 cls.setattr(column_name, column_field)?;

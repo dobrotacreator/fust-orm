@@ -207,9 +207,19 @@ pub fn select(_py: Python, args: &Bound<'_, PyTuple>) -> PyResult<QueryBuilder> 
                 )
                 .into());
             }
-            columns.push(col_field.column_name.clone());
-        } else if let Ok(where_cond) = arg.extract::<PyRef<WhereCondition>>() {
-            where_clauses.push(where_cond.clone());
+            if col_field.where_conditions.is_empty() {
+                columns.push(col_field.column_name.clone());
+            } else {
+                if col_field
+                    .where_conditions
+                    .iter()
+                    .any(|cond| cond.select_column)
+                {
+                    columns.push(col_field.column_name.clone());
+                }
+                where_clauses.extend(col_field.where_conditions.iter().cloned());
+                continue;
+            }
         } else {
             return Err(FustOrmError::InvalidQueryArgument(format!(
                 "Unsupported argument type in select(): {}",
