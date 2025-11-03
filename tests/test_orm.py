@@ -27,32 +27,35 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
+SCHEMA_USER = """
+CREATE TABLE IF NOT EXISTS user (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    age INTEGER,
+    manager_id INTEGER
+);
+"""
+
+SCHEMA_PRODUCT = """
+CREATE TABLE IF NOT EXISTS product (
+    id INTEGER PRIMARY KEY,
+    product_name TEXT NOT NULL
+);
+"""
+
+
 @pytest.fixture(scope="session")
 async def _db() -> Database:
     database = await Database.connect("sqlite::memory:")
-    await database.execute(
-        """
-        CREATE TABLE user (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            age INTEGER,
-            manager_id INTEGER
-        );
-        """
-    )
-    await database.execute(
-        """
-        CREATE TABLE product (
-            id INTEGER PRIMARY KEY,
-            product_name TEXT NOT NULL
-        );
-        """
-    )
+    await database.execute(SCHEMA_USER)
+    await database.execute(SCHEMA_PRODUCT)
     return database
 
 
 @pytest.fixture
 async def db(_db: Database) -> Database:
+    await _db.execute(SCHEMA_USER)
+    await _db.execute(SCHEMA_PRODUCT)
     await _db.execute("DELETE FROM user;")
     await _db.execute("DELETE FROM product;")
     return _db
