@@ -27,8 +27,8 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
-@pytest.fixture
-async def db() -> Database:
+@pytest.fixture(scope="session")
+async def _db() -> Database:
     database = await Database.connect("sqlite::memory:")
     await database.execute(
         """
@@ -49,6 +49,13 @@ async def db() -> Database:
         """
     )
     return database
+
+
+@pytest.fixture
+async def db(_db: Database) -> Database:
+    await _db.execute("DELETE FROM user;")
+    await _db.execute("DELETE FROM product;")
+    return _db
 
 
 async def test_db_connection(db: Database) -> None:
