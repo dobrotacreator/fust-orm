@@ -8,31 +8,40 @@ use pyo3::{
 
 use crate::where_condition::WhereCondition;
 
+/// Indicates the ordering direction when a column is used in an ORDER BY clause.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderDirection {
+    Asc,
+    Desc,
+}
+
 /// Represents a database column as a Python object.
 ///
-/// This struct acts as a descriptor on a `Model` subclass. It doesn't hold data itself;
-/// instead, it captures operations (like comparisons) to build SQL `WHERE` clauses.
-/// When you write `MyModel.id == 5`, an instance of `WhereCondition` is created,
-/// representing the expression `id = 5`.
+/// This struct acts as a descriptor on a `Model` subclass. It captures column metadata
+/// and lazily accumulates `WHERE` conditions created via Python comparisons. Chaining
+/// comparisons produces new `ColumnField` instances that retain the original column
+/// metadata plus the collected conditions so the query builder can extract everything
+/// from a single object.
 #[pyclass(generic)]
 #[derive(Debug, Clone)]
 pub struct ColumnField {
     pub table_name: String,
     pub column_name: String,
+    pub where_conditions: Vec<WhereCondition>,
+    pub order_direction: Option<OrderDirection>,
 }
 
-/// A helper function to reduce boilerplate when creating WhereCondition instances.
-fn create_where_condition(
-    column_field: &ColumnField,
-    operator: &str,
-    value: Py<PyAny>,
-) -> PyResult<WhereCondition> {
-    Ok(WhereCondition {
-        column_name: column_field.column_name.clone(),
-        operator: operator.to_string(),
-        value: Arc::new(value),
-        select_column: false,
-    })
+impl ColumnField {
+    fn with_condition(&self, operator: &str, value: Py<PyAny>) -> PyResult<ColumnField> {
+        let mut new_field = self.clone();
+        new_field.where_conditions.push(WhereCondition {
+            column_name: self.column_name.clone(),
+            operator: operator.to_string(),
+            value: Arc::new(value),
+            select_column: false,
+        });
+        Ok(new_field)
+    }
 }
 
 #[pymethods]
@@ -41,81 +50,81 @@ impl ColumnField {
 
     /// Creates an equality condition (`=` or `IS`).
     /// Handles `None` by translating `column == None` to SQL `column IS NULL`.
-    fn __eq__(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn __eq__(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         let op = if other.is_none(py) {
             "IS".to_string()
         } else {
             "=".to_string()
         };
-        create_where_condition(self, &op, other)
+        self.with_condition(&op, other)
     }
 
     /// Creates an inequality condition (`!=` or `IS NOT`).
     /// Handles `None` by translating `column != None` to SQL `column IS NOT NULL`.
-    fn __ne__(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn __ne__(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         let op = if other.is_none(py) {
             "IS NOT".to_string()
         } else {
             "!=".to_string()
         };
-        create_where_condition(self, &op, other)
+        self.with_condition(&op, other)
     }
 
     /// Creates a "greater than" condition (`>`).
-    fn __gt__(&self, _py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
-        create_where_condition(self, ">", other)
+    fn __gt__(&self, _py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
+        self.with_condition(">", other)
     }
 
     /// Creates a "greater than or equal to" condition (`>=`).
-    fn __ge__(&self, _py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
-        create_where_condition(self, ">=", other)
+    fn __ge__(&self, _py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
+        self.with_condition(">=", other)
     }
 
     /// Creates a "less than" condition (`<`).
-    fn __lt__(&self, _py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
-        create_where_condition(self, "<", other)
+    fn __lt__(&self, _py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
+        self.with_condition("<", other)
     }
 
     /// Creates a "less than or equal to" condition (`<=`).
-    fn __le__(&self, _py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
-        create_where_condition(self, "<=", other)
+    fn __le__(&self, _py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
+        self.with_condition("<=", other)
     }
 
     // --- Method Aliases for Operators ---
 
     /// Method alias for `==`. Creates an equality condition (`=` or `IS`).
     #[pyo3(text_signature = "($self, value)")]
-    fn eq(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn eq(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__eq__(py, other)
     }
 
     /// Method alias for `!=`. Creates an inequality condition (`!=` or `IS NOT`).
     #[pyo3(text_signature = "($self, value)")]
-    fn ne(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn ne(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__ne__(py, other)
     }
 
     /// Method alias for `>`. Creates a "greater than" condition.
     #[pyo3(text_signature = "($self, value)")]
-    fn gt(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn gt(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__gt__(py, other)
     }
 
     /// Method alias for `>=`. Creates a "greater than or equal to" condition.
     #[pyo3(text_signature = "($self, value)")]
-    fn ge(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn ge(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__ge__(py, other)
     }
 
     /// Method alias for `<`. Creates a "less than" condition.
     #[pyo3(text_signature = "($self, value)")]
-    fn lt(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn lt(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__lt__(py, other)
     }
 
     /// Method alias for `<=`. Creates a "less than or equal to" condition.
     #[pyo3(text_signature = "($self, value)")]
-    fn le(&self, py: Python, other: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn le(&self, py: Python, other: Py<PyAny>) -> PyResult<ColumnField> {
         self.__le__(py, other)
     }
 
@@ -123,35 +132,35 @@ impl ColumnField {
 
     /// Creates a `LIKE` condition (case-sensitive pattern matching).
     /// Example: `User.name.like("J%")`
-    fn like(&self, _py: Python, pattern: Py<PyString>) -> PyResult<WhereCondition> {
-        create_where_condition(self, "LIKE", pattern.into())
+    fn like(&self, _py: Python, pattern: Py<PyString>) -> PyResult<ColumnField> {
+        self.with_condition("LIKE", pattern.into())
     }
 
     /// Creates an `ILIKE` condition (case-insensitive pattern matching).
     /// Note: `ILIKE` is specific to databases like PostgreSQL. For others,
     /// you might need to use `LOWER(column) LIKE LOWER(pattern)`.
     /// Example: `User.name.ilike("j%")`
-    fn ilike(&self, _py: Python, pattern: Py<PyString>) -> PyResult<WhereCondition> {
-        create_where_condition(self, "ILIKE", pattern.into())
+    fn ilike(&self, _py: Python, pattern: Py<PyString>) -> PyResult<ColumnField> {
+        self.with_condition("ILIKE", pattern.into())
     }
 
     /// Creates an `IN` condition to check for a value within any iterable.
     /// Example: `User.status.in_(["active", "pending"])`
     /// Example: `User.status.in_({"active", "pending"})`
-    fn in_(&self, py: Python, values: &Bound<PyAny>) -> PyResult<WhereCondition> {
+    fn in_(&self, py: Python, values: &Bound<PyAny>) -> PyResult<ColumnField> {
         let py_iterator = values
             .try_iter()
             .map_err(|_| PyTypeError::new_err("Argument to `in_` must be an iterable."))?;
         let list_values =
             PyList::new(py, &py_iterator.collect::<PyResult<Vec<Bound<PyAny>>>>()?)?.into();
-        create_where_condition(self, "IN", list_values)
+        self.with_condition("IN", list_values)
     }
 
     /// Creates an explicit `IS` condition.
     /// This provides a more readable alternative to `==` for some cases.
     /// Example: `User.manager_id.is_(None)`
     #[pyo3(text_signature = "($self, value)")]
-    fn is_(&self, py: Python, value: Py<PyAny>) -> PyResult<WhereCondition> {
+    fn is_(&self, py: Python, value: Py<PyAny>) -> PyResult<ColumnField> {
         self.__eq__(py, value)
     }
 
@@ -159,8 +168,33 @@ impl ColumnField {
     /// This provides a more readable alternative to `!=` for some cases.
     /// Example: `User.manager_id.is_not(None)`
     #[pyo3(text_signature = "($self, value)")]
-    fn is_not(&self, _py: Python, value: Py<PyAny>) -> PyResult<WhereCondition> {
-        create_where_condition(self, "IS NOT", value)
+    fn is_not(&self, _py: Python, value: Py<PyAny>) -> PyResult<ColumnField> {
+        self.with_condition("IS NOT", value)
+    }
+
+    /// Marks the latest where condition for selection when unary plus is applied.
+    fn __pos__(&self) -> PyResult<ColumnField> {
+        let mut new_field = self.clone();
+        if let Some(last_condition) = new_field.where_conditions.last_mut() {
+            last_condition.select_column = true;
+        }
+        Ok(new_field)
+    }
+
+    /// Returns a cloned `ColumnField` configured for ascending order.
+    #[pyo3(text_signature = "($self)")]
+    fn asc(&self) -> ColumnField {
+        let mut new_field = self.clone();
+        new_field.order_direction = Some(OrderDirection::Asc);
+        new_field
+    }
+
+    /// Returns a cloned `ColumnField` configured for descending order.
+    #[pyo3(text_signature = "($self)")]
+    fn desc(&self) -> ColumnField {
+        let mut new_field = self.clone();
+        new_field.order_direction = Some(OrderDirection::Desc);
+        new_field
     }
 
     /// Provides a developer-friendly representation of the ColumnField object.

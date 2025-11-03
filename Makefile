@@ -11,7 +11,7 @@ dev:
 
 
 .PHONY: tests
-tests: dev
+tests:
 	$(pytest) --no-header --no-cov -vv tests
 
 

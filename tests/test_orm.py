@@ -27,28 +27,38 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
-@pytest.fixture
-async def db() -> Database:
+SCHEMA_USER = """
+CREATE TABLE IF NOT EXISTS user (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    age INTEGER,
+    manager_id INTEGER
+);
+"""
+
+SCHEMA_PRODUCT = """
+CREATE TABLE IF NOT EXISTS product (
+    id INTEGER PRIMARY KEY,
+    product_name TEXT NOT NULL
+);
+"""
+
+
+@pytest.fixture(scope="session")
+async def _db() -> Database:
     database = await Database.connect("sqlite::memory:")
-    await database.execute(
-        """
-        CREATE TABLE user (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            age INTEGER,
-            manager_id INTEGER
-        );
-        """
-    )
-    await database.execute(
-        """
-        CREATE TABLE product (
-            id INTEGER PRIMARY KEY,
-            product_name TEXT NOT NULL
-        );
-        """
-    )
+    await database.execute(SCHEMA_USER)
+    await database.execute(SCHEMA_PRODUCT)
     return database
+
+
+@pytest.fixture
+async def db(_db: Database) -> Database:
+    await _db.execute(SCHEMA_USER)
+    await _db.execute(SCHEMA_PRODUCT)
+    await _db.execute("DELETE FROM user;")
+    await _db.execute("DELETE FROM product;")
+    return _db
 
 
 async def test_db_connection(db: Database) -> None:
@@ -262,6 +272,47 @@ async def test_like_operator(db: Database) -> None:
     assert results[0]["id"] == 1
 
 
+async def test_select_with_limit_and_offset(db: Database) -> None:
+    await db.execute(
+        """
+        INSERT INTO user (id, name, age, manager_id) VALUES
+        (1, 'Alice', 30, NULL),
+        (2, 'Bob', 25, 1),
+        (3, 'Charlie', 35, 1),
+        (4, 'Diana', 28, NULL);
+        """
+    )
+
+    limited = await db.execute(select(User, limit=2, order_by=(User.id,)))
+    assert [row["id"] for row in limited] == [1, 2]
+
+    offset_rows = await db.execute(select(User, limit=2, offset=1, order_by=(User.id,)))
+    assert [row["id"] for row in offset_rows] == [2, 3]
+
+
+async def test_select_with_order_by(db: Database) -> None:
+    await db.execute(
+        """
+        INSERT INTO user (id, name, age, manager_id) VALUES
+        (1, 'Alice', 30, NULL),
+        (2, 'Bob', 25, 1),
+        (3, 'Charlie', 35, 1);
+        """
+    )
+
+    query_desc = select(User.name, order_by=(User.age.desc(),))
+    results_desc = await db.execute(query_desc)
+    assert [row["name"] for row in results_desc] == ["Charlie", "Alice", "Bob"]
+
+    query_default = select(User.name, order_by=(User.name,))
+    results_default = await db.execute(query_default)
+    assert [row["name"] for row in results_default] == ["Alice", "Bob", "Charlie"]
+
+    query_multi = select(User.name, order_by=(User.age.desc(), User.name.desc()))
+    results_multi = await db.execute(query_multi)
+    assert [row["name"] for row in results_multi] == ["Charlie", "Alice", "Bob"]
+
+
 async def test_select_from_multiple_tables_raises_error() -> None:
     with pytest.raises(ValueError):
         select(User.id, Product.product_name)
@@ -270,3 +321,15 @@ async def test_select_from_multiple_tables_raises_error() -> None:
 async def test_select_with_no_arguments_raises_error() -> None:
     with pytest.raises(ValueError):
         select()
+
+
+def test_select_with_limit_in_raw_query_raises_error() -> None:
+    with pytest.raises(ValueError):
+        #                                        break type for test
+        select("SELECT * FROM user", limit=1)  # type: ignore[call-overload]
+
+
+def test_select_with_order_by_in_raw_query_raises_error() -> None:
+    with pytest.raises(ValueError):
+        #                                                    break type for test
+        select("SELECT * FROM user", order_by=(User.id,))  # type: ignore[call-overload]
